@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "LotFinder",
-    "slug": "LotFinder",
+    "slug": "lotfinder",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -36,6 +36,15 @@
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "1c32b18a-600b-4783-ac57-a22e194d17d5"
+      }
+    },
+    "owner": "legendcoder"
   }
 }

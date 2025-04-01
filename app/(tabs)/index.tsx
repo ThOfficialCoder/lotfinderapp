@@ -1,60 +1,70 @@
-import { Image, StyleSheet, Platform } from 'react-native';
+import { Image, StyleSheet,TouchableOpacity, Text } from 'react-native';
+import React, { useState } from 'react';
 
-import { HelloWave } from '@/components/HelloWave';
+import {pickerRef, open, close} from '../../scripts/index.js';
+import { Picker } from '@react-native-picker/picker';
 import ParallaxScrollView from '@/components/ParallaxScrollView';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
+import MapView, { UrlTile } from 'react-native-maps';
 
 export default function HomeScreen() {
+  const [selectedCity, setSelectedCity] = useState();
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
+    <ParallaxScrollView 
+    headerImage={<Image
+      source={require('@/assets/images/react-logo.png')}
+      style={styles.reactLogo}
+      resizeMode="contain"
+    />} 
+    headerBackgroundColor={{
+      dark: '',
+      light: ''
+    }}>
       <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
+        <ThemedText type="title">Welcome to Parking App</ThemedText>
       </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12'
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
+
+      <ThemedView>
+        <MapView style={styles.map} 
+          initialRegion={{latitude: 37.78825, longitude: -122.4324, latitudeDelta: 0.0922, longitudeDelta: 0.0421}}>
+          <UrlTile urlTemplate='https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
+            maximumZ={19}
+            flipY={false}
+            zIndex={1} />
+        </MapView>
       </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-        <ThemedText>
-          Tap the Explore tab to learn more about what's included in this starter app.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          When you're ready, run{' '}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
+
+      <ThemedText>Select a city:</ThemedText>
+      <Picker ref={pickerRef} selectedValue={selectedCity} onValueChange={(itemValue, itemIndex) => setSelectedCity(itemValue)}>
+        <Picker.Item label="New York" value="NY" />
+        <Picker.Item label="San Francisco" value="SF" />
+        <Picker.Item label="Los Angeles" value="LA" />
+      </Picker>
+
+      <TouchableOpacity style={styles.button} onPress={() => console.log('button clicked')}>
+        <Text style={styles.buttonText}>Add a spot</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity style={styles.button} onPress={() => console.log('button clicked')}>
+        <Text style={styles.buttonText}>I just left</Text>
+      </TouchableOpacity>
     </ParallaxScrollView>
   );
 }
 
 const styles = StyleSheet.create({
+  map: {
+    height: 300,
+    width: '100%',
+    marginVertical: 12,
+    zIndex: 0
+  },
+  buttonText: {
+    color: 'white',
+    fontSize: 16
+  },
   titleContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -71,4 +81,11 @@ const styles = StyleSheet.create({
     left: 0,
     position: 'absolute',
   },
+  button: {
+    backgroundColor: '#007BFF',
+    borderRadius: 4,
+    padding: 8,
+    marginTop: 8,
+    width: 100,
+  }
 });
