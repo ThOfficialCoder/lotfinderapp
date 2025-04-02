@@ -49,7 +49,7 @@ async function OnPressAddSpotButton(selectedCity, user, setSpots, saveSpotToData
     try {
         const source = selectedSpot
               ? { coords : { latitude: selectedSpot.latitude, longitude: selectedSpot.longitude } }
-              : await Location.getCurrentPositionAsync({});
+              : await getCurrentLocation();
         
         const placemarks = await Location.reverseGeocodeAsync({
               latitude: source.coords.latitude,

@@ -36,40 +36,32 @@ export default function HomeScreen() {
   const user = auth.currentUser?.uid || 'testUser123';
   const [selectedSpot, setSelectedSpot] = useState<Spot | null>(null);
 
-  useEffect(() => {
-    const unsubscribe = onSnapshot(collection(db, 'spots'), async (snapshot) => {
-      const now = Date.now();
-  
-      // First, clean up old "left" spots
-      for (const docSnap of snapshot.docs) {
-        const spot = docSnap.data();
-        if (spot.type === 'left') {
-          const spotTime = new Date(spot.timestamp).getTime();
-          if (now - spotTime > 10 * 60 * 1000) {
-            await deleteDoc(doc(db, 'spots', docSnap.id));
-            console.log(`Auto-removed expired spot: ${docSnap.id}`);
-          }
-        }
+  let isCleaningUp = false;
+
+useEffect(() => {
+  const unsubscribe = onSnapshot(collection(db, 'spots'), async (snapshot) => {
+    if (isCleaningUp) return;
+    isCleaningUp = true;
+
+    const now = Date.now();
+    const updatedSpots: Spot[] = [];
+
+    for (const docSnap of snapshot.docs) {
+      const data = docSnap.data();
+      const spotTime = new Date(data.timestamp).getTime();
+      const isOldLeft = data.type === 'left' && now - spotTime > 10 * 60 * 1000;
+
+      if (!isOldLeft) {
+        updatedSpots.push({ ...(data as Spot), id: docSnap.id });
       }
-  
-      // Now update spots state with valid ones
-      const updatedSpots = snapshot.docs
-        .map((doc) => ({ ...(doc.data() as Spot), id: doc.id }))
-        .filter((spot: any) => {
-          if (spot.type === 'left') {
-            const spotTime = new Date(spot.timestamp).getTime();
-            return now - spotTime <= 10 * 60 * 1000; // ⏱ show if under 10 min
-          }
-          return true; // keep all non-left spots
-        });
-  
-      setSpots(updatedSpots);
-    });
-  
-    return () => {
-      unsubscribe();
-    };
-  }, []);
+    }
+
+    setSpots(updatedSpots);
+    isCleaningUp = false;
+  });
+
+  return () => unsubscribe();
+}, []);
 
   const handleClaimSpot = async (spot: Spot) => {
     if (!spot.id) {
