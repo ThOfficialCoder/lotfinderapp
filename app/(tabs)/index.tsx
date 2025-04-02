@@ -2,7 +2,7 @@ import { Image, StyleSheet,TouchableOpacity, Text, View, TextInput, Linking } fr
 import React, { useState, useEffect, useRef } from 'react';
 import * as Location from 'expo-location';
 import { db } from '../../scripts/firebase';
-import { collection, onSnapshot, addDoc, doc, updateDoc } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import {auth} from '../../scripts/auth';
 
 import {pickerRef, open, close, OnPressAddSpotButton} from '../../scripts/index';
@@ -17,7 +17,8 @@ type Spot = {
   longitude: number;
   city: string;
   timestamp: any;
-  type?: string;
+  placeName?: string;
+  type?: 'left';
   claimedBy?: string;
   id: string;
   isFree?: boolean;
@@ -33,28 +34,50 @@ export default function HomeScreen() {
   const mapRef = useRef<MapView | null>(null);
   const [searchQuery, setSeachQuery] = useState<string>('');
   const user = auth.currentUser?.uid || 'testUser123';
+  const [selectedSpot, setSelectedSpot] = useState<Spot | null>(null);
 
   useEffect(() => {
-    const unsubscibe = onSnapshot(collection(db, 'spots'), (snapshot) => {
+    const unsubscribe = onSnapshot(collection(db, 'spots'), async (snapshot) => {
       const now = Date.now();
-
+  
+      // First, clean up old "left" spots
+      for (const docSnap of snapshot.docs) {
+        const spot = docSnap.data();
+        if (spot.type === 'left') {
+          const spotTime = new Date(spot.timestamp).getTime();
+          if (now - spotTime > 10 * 60 * 1000) {
+            await deleteDoc(doc(db, 'spots', docSnap.id));
+            console.log(`Auto-removed expired spot: ${docSnap.id}`);
+          }
+        }
+      }
+  
+      // Now update spots state with valid ones
       const updatedSpots = snapshot.docs
-        .map((doc) => ({ ...(doc.data() as Spot), id: doc.id}))
+        .map((doc) => ({ ...(doc.data() as Spot), id: doc.id }))
         .filter((spot: any) => {
-          if (spot.type == 'left') {
+          if (spot.type === 'left') {
             const spotTime = new Date(spot.timestamp).getTime();
-            return now - spotTime < 30 * 60 * 1000;
-          };
-          return true;
+            return now - spotTime <= 10 * 60 * 1000; // ⏱ show if under 10 min
+          }
+          return true; // keep all non-left spots
         });
-        setSpots(updatedSpots);
-      });
+  
+      setSpots(updatedSpots);
+    });
+  
     return () => {
-      unsubscibe();
+      unsubscribe();
     };
   }, []);
 
   const handleClaimSpot = async (spot: Spot) => {
+    if (!spot.id) {
+      console.error('Spot ID is missing');
+      return;
+    }
+
+
     try {
       const spotRef = doc(db, 'spots', spot.id);
       await updateDoc(spotRef, { claimedBy: user });
@@ -84,11 +107,19 @@ export default function HomeScreen() {
   const handleLongPress = async (event: any) => {
     const coordinate = event.nativeEvent.coordinate;
 
+    const placemarks = await Location.reverseGeocodeAsync({
+      latitude: coordinate.latitude,
+      longitude: coordinate.longitude,
+    });
+
+    const autoCity = placemarks[0]?.name || 'Unknown';
+
     const spot = {
       latitude: coordinate.latitude,
       longitude: coordinate.longitude,
       timestamp: new Date().toISOString(),
-      city: selectedCity || '',
+      city: autoCity,
+      placeName: searchQuery || autoCity,
       addedBy: user
     };
 
@@ -102,24 +133,35 @@ export default function HomeScreen() {
 
   const handleJustLeft = async () => {
     try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        setErrorMsg('Permission to access location was denied');
+      if (!selectedSpot || !selectedSpot.id) {
+        alert('Please tap on a spot you`re leaving');
         return;
       }
 
-      const location = await Location.getCurrentPositionAsync({});
+      const source = selectedSpot
+      ? { coords : { latitude: selectedSpot.latitude, longitude: selectedSpot.longitude } }
+      : await Location.getCurrentPositionAsync({});
+
+      const placemarks = await Location.reverseGeocodeAsync({
+        latitude: source.coords.latitude,
+        longitude: source.coords.longitude,
+      });
+      const autoCity = placemarks[0]?.city || 'Unknown';
+      
       const spot = {
-        latitude: location.coords.latitude,
-        longitude: location.coords.longitude,
+        latitude: source.coords.latitude,
+        longitude: source.coords.longitude,
         timestamp: new Date().toISOString(),
-        city: selectedCity || '',
+        city: autoCity,
+        placeName: searchQuery || autoCity,
         addedBy: user,
         type: 'left',
+        id: `temp-${Date.now()}`,
       };
 
       await FirebaseFunctions.addSpot(spot);
-      console.log('Vacated spot added!');
+      setSpots((prev: any) => [...prev, spot]);
+      console.log((prev: any) => [...prev, spot]);
       } catch (error) {
         console.error('Error adding vacated spot:', error);
       }
@@ -141,26 +183,9 @@ export default function HomeScreen() {
       }
     },
   };
-     
-let text = 'Waiting..';
-if (errorMsg) {
-    text = errorMsg;
-}
-else if (location) {
-    text = JSON.stringify(location);
-}
 
   return (
-    <ParallaxScrollView 
-    headerImage={<Image
-      source={require('@/assets/images/react-logo.png')}
-      style={styles.reactLogo}
-      resizeMode="contain"
-    />} 
-    headerBackgroundColor={{
-      dark: '',
-      light: ''
-    }}>
+    <ParallaxScrollView>
       <ThemedView style={styles.titleContainer}>
         <ThemedText type="title">Welcome to Parking App</ThemedText>
       </ThemedView>
@@ -177,13 +202,14 @@ else if (location) {
               <Marker
                 key={index}
                 coordinate={{ latitude: spot.latitude, longitude: spot.longitude }}
-                pinColor={spot.type === 'left' ? 'orange' : 'blue'}
-                title={`Spot in ${spot.city}`}
+                pinColor={spot.type === 'left' ? 'green' : 'red'}
+                title={spot.type === 'left' ? 'Recently Left Spot' : `Spot #${index + 1}`}
                 description={
                   spot.claimedBy
                     ? `Claimed by ${spot.claimedBy}`
                     :`Added at ${new Date(spot.timestamp).toLocaleTimeString()}`}
                 onPress={() => {
+                  setSelectedSpot(spot);
                   if (spot.type === 'left' && !spot.claimedBy) {
                     handleClaimSpot(spot);
                   }
@@ -191,10 +217,13 @@ else if (location) {
               >
                 <Callout onPress={() => Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${spot.latitude},${spot.longitude}`)}>
                   <View style={{ width: 200 }}>
-                    <Text style={{ fontWeight: 'bold' }}>Spot in {spot.city}</Text>
-                    <Text>{spot.notes || 'No notes'}</Text>
-                    <Text>{spot.isFree ? 'Free' : 'Paid'}</Text>
-                    <Text>{spot.openHours || 'No hours listed'}</Text>
+                    <Text style={{ fontWeight: 'bold' }}>
+                      {spot.placeName 
+                      ? `Near ${spot.placeName}` 
+                      : spot.city
+                      ? `Spot in ${spot.city}`
+                      : `Unnamed spot at (${spot.latitude.toFixed(4)}, ${spot.longitude.toFixed(4)})`}
+                    </Text>
                     <Text style={{ color: 'blue', marginTop: 8 }}>Get Directions</Text>
                   </View>
               </Callout>
@@ -216,73 +245,79 @@ else if (location) {
           <Text style={styles.buttonText}>Search</Text>
         </TouchableOpacity>
 
-      <TouchableOpacity style={styles.button} onPress={() => OnPressAddSpotButton(selectedCity, user, setSpots, saveSpotToData, FirebaseFunctions, mapRef)}>
+      <TouchableOpacity style={styles.button} onPress={() => OnPressAddSpotButton(selectedCity, user, setSpots, saveSpotToData, FirebaseFunctions, mapRef, selectedSpot, searchQuery)}>
         <Text style={styles.buttonText}>Add a spot</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity style={styles.button} onPress={handleJustLeft}>
+      <TouchableOpacity style={styles.button} onPress={handleJustLeft}
+      disabled={!selectedSpot}>
         <Text style={styles.buttonText}>I just left</Text>
       </TouchableOpacity>
-
-      <View style={styles.stepContainer}>
-        <Text style={styles.paragraph}>{text}</Text>
-      </View>
     </ParallaxScrollView>
-  );
-}
+  )};
 
 const styles = StyleSheet.create({
-  buttonText: {
-    color: 'white',
-    fontSize: 16,
-    textAlign: 'center',
-    padding: 10,
-  },
-  inputText: {
-    color: 'white',
-    borderWidth: 1,
-    borderColor: '#ccc',
-    padding: 10,
-    margin: 10,
-    borderRadius: 6,
-  },
   container: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 20,
-  },
-  paragraph: {
-    fontSize: 18,
-    textAlign: 'center',
-  },
-  map: {
-    height: 300,
-    width: '100%',
-    marginVertical: 12,
-    zIndex: 0,
+    paddingHorizontal: 20,
+    backgroundColor: '#f9f9f9', // light background for contrast
   },
   titleContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    justifyContent: 'center',
+    marginVertical: 20,
   },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
+  map: {
+    height: 300,
+    width: '100%',
+    marginVertical: 16,
+    borderRadius: 12,
+    overflow: 'hidden',
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
+  inputText: {
+    backgroundColor: '#fff',
+    color: '#333',
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    marginBottom: 12,
   },
   button: {
     backgroundColor: '#007BFF',
-    borderRadius: 4,
-    padding: 8,
-    marginTop: 8,
-    width: 100,
-  }
+    borderRadius: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    marginTop: 12,
+    alignSelf: 'center',
+    width: '60%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  buttonText: {
+    color: '#fff',
+    fontSize: 16,
+    textAlign: 'center',
+    fontWeight: '600',
+  },
+  paragraph: {
+    fontSize: 16,
+    textAlign: 'center',
+    color: '#444',
+    marginBottom: 12,
+  },
+  stepContainer: {
+    marginBottom: 16,
+  },
+  reactLogo: {
+    height: 140,
+    width: 250,
+    resizeMode: 'contain',
+    marginBottom: 12,
+  },
 });
