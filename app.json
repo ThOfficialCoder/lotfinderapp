@@ -45,6 +45,12 @@
         "projectId": "1c32b18a-600b-4783-ac57-a22e194d17d5"
       }
     },
-    "owner": "legendcoder"
+    "owner": "legendcoder",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/1c32b18a-600b-4783-ac57-a22e194d17d5"
+    }
   }
 }

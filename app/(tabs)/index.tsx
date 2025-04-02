@@ -187,7 +187,7 @@ export default function HomeScreen() {
   return (
     <ParallaxScrollView>
       <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome to Parking App</ThemedText>
+        <ThemedText type="title">Lotfinder App</ThemedText>
       </ThemedView>
 
       <ThemedView>
@@ -300,7 +300,7 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   buttonText: {
-    color: '#fff',
+    color: 'black',
     fontSize: 16,
     textAlign: 'center',
     fontWeight: '600',
