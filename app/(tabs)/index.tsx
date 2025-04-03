@@ -190,7 +190,9 @@ useEffect(() => {
             maximumZ={19}
             flipY={false}
             zIndex={1} />
-            {spots.map((spot, index) => (
+            {spots
+            .filter(spot => spot.latitude && spot.longitude)
+            .map((spot, index) => (
               <Marker
                 key={index}
                 coordinate={{ latitude: spot.latitude, longitude: spot.longitude }}
@@ -210,11 +212,13 @@ useEffect(() => {
                 <Callout onPress={() => Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${spot.latitude},${spot.longitude}`)}>
                   <View style={{ width: 200 }}>
                     <Text style={{ fontWeight: 'bold' }}>
-                      {spot.placeName 
-                      ? `Near ${spot.placeName}` 
+                    {spot.placeName
+                      ? `Near ${spot.placeName}`
                       : spot.city
                       ? `Spot in ${spot.city}`
-                      : `Unnamed spot at (${spot.latitude.toFixed(4)}, ${spot.longitude.toFixed(4)})`}
+                      : (spot.latitude && spot.longitude)
+                      ? `Unnamed spot at (${spot.latitude.toFixed(4)}, ${spot.longitude.toFixed(4)})`
+                      : `Unnamed spot`}
                     </Text>
                     <Text style={{ color: 'blue', marginTop: 8 }}>Get Directions</Text>
                   </View>
